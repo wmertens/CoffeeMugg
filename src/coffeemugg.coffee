@@ -109,13 +109,36 @@ coffeemugg.CMContext = CMContext = (options={}) ->
       this
 
     render_tag: (name, args) ->
+      attrs =
+        class: {}
+
       # get idclass, attrs, contents
+      # TODO move html specific stuff to html  plugin somehow
       for a in args
         switch typeof a
           when 'function'
             contents = a.bind(this)
           when 'object'
-            attrs = a
+            # Merge attributes
+            for k, v of a
+              switch k
+                when 'class'
+                  # Allow a string, an array or an object which allows turning off classes
+                  v = v.split /\s+/ if v.split?
+                  if typeof v is 'object'
+                    if v instanceof Array
+                      for c in v
+                        attrs.class[c] = true if c
+                    else
+                      for c, b of v
+                        attrs.class[c] = b if c
+                  else
+                    throw new Error "Argument type for class not supported: #{k}:#{v}"
+                when 'style'
+                  # TODO move CSS property parsing to a string-returning function
+                  attrs[k] = v
+                else
+                  attrs[k] = v
           when 'number', 'boolean'
             contents = a
           when 'string'
@@ -123,11 +146,14 @@ coffeemugg.CMContext = CMContext = (options={}) ->
               contents = a
             else
               if a is args[0]
-                idclass = a
+                for i in a.split '.'
+                  if i[0] is '#'
+                    attrs.id = i[1..]
+                  else if i
+                    attrs.class[i] = true
               else
                 contents = a
       @textnl "<#{name}"
-      @render_idclass(idclass) if idclass
       @render_attrs(attrs) if attrs
       if coffeemugg.self_closing[name]
         @text ' />'
@@ -137,19 +163,16 @@ coffeemugg.CMContext = CMContext = (options={}) ->
         @text "</#{name}>"
       NEWLINE
 
-    render_idclass: (str) ->
-      classes = []
-      str = String(str).replace /"/, "&quot;"
-      for i in str.split '.'
-        if i[0] is '#'
-          id = i[1..]
-        else
-          classes.push i unless i is ''
-      @text " id=\"#{id}\"" if id
-      @text " class=\"#{classes.join ' '}\"" if classes.length > 0
-
     render_attrs: (obj) ->
       for k, v of obj
+        continue if not v?
+
+        if k is 'class'
+          t = []
+          for className, isMember of v
+            t.push className if isMember
+          v = t.join ' '
+
         # true is rendered as `selected="selected"`.
         if typeof v is 'boolean' and v
           v = k

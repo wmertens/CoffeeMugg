@@ -78,7 +78,7 @@ tests =
   'ID/class shortcut (combo)':
     template: ->
       @div '#myid.myclass1.myclass2', 'foo'
-    expected: '<div id="myid" class="myclass1 myclass2">foo</div>'
+    expected: '<div class="myclass1 myclass2" id="myid">foo</div>'
 
   'ID/class shortcut (ID only)':
     template: ->
@@ -98,7 +98,7 @@ tests =
   'ID/class shortcut (no string contents)':
     template: ->
       @img '#myid.myclass', src: '/pic.png'
-    expected: '<img id="myid" class="myclass" src="/pic.png" />'
+    expected: '<img class="myclass" id="myid" src="/pic.png" />'
       
   'Attribute values':
     template: ->
