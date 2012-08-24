@@ -200,6 +200,13 @@ tests =
           animation: "foo"
     expected: 'selector {animation: foo;ms-animation: foo;-moz-animation: foo;-webkit-animation: foo;}'
 
+  'CSS style attribute':
+    template: ->
+      @div style: @css_attr
+        animation: "foo"
+        border_color: "foo"
+    expected: '''<div style="animation: foo;ms-animation: foo;-moz-animation: foo;-webkit-animation: foo;border-color: foo;"></div>'''
+
 cm = require './src/coffeemugg'
 
 @run = ->

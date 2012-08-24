@@ -383,6 +383,35 @@ HTMLPlugin = (context) ->
   for p in css_needs_prefix
     prefixed_css_prop[p] = true
 
+  # Handles CSS selectors with their properties
+  parse_selector = (selector, obj, parent) ->
+    if parent
+      # Rewrite our selector using the parent
+      selectors = for p in parent.split /\s*,\s*/
+        for s in selector.split /\s*,\s*/
+          if s.indexOf('&') >= 0
+            s.replace /&/g, p
+          else
+            "#{p} #{s}"
+      selector = selectors.join ','
+    @_indent += '  ' if @options.format
+    open = parse_css_obj.call @, selector, obj
+    @_indent = @_indent[2..] if @options.format
+    @textnl "}" if open
+
+  # Handles bare CSS property objects / arrays
+  parse_css_obj = (selector, obj, open=no) ->
+    if obj instanceof Array
+      for o in obj then for prop, val of o
+        open = parse_prop.call @, prop, val, selector, open
+    else if typeof obj is 'object'
+      for prop, val of obj
+        open = parse_prop.call @, prop, val, selector, open
+    else
+      throw new Error "Don't know what to do with #{obj}"
+    open
+
+  # Handles single CSS properties
   parse_prop = (prop, val, parent, open) ->
     #  _ to -
     t = prop.replace /_/g, '-'
@@ -405,31 +434,12 @@ HTMLPlugin = (context) ->
           @textnl "#{pre}#{line}"
       return yes
 
-  parse_selector = (selector, obj, parent) ->
-    if parent
-      # Rewrite our selector using the parent
-      selectors = for p in parent.split /\s*,\s*/
-        for s in selector.split /\s*,\s*/
-          if s.indexOf('&') >= 0
-            s.replace /&/g, p
-          else
-            "#{p} #{s}"
-      selector = selectors.join ','
-
-    open = no
-    @_indent += '  ' if @options.format
-    if obj instanceof Array
-      for o in obj then for prop, val of o
-        open = parse_prop.call @, prop, val, selector, open
-    else if typeof obj is 'object'
-      for prop, val of obj
-        open = parse_prop.call @, prop, val, selector, open
-    else
-      throw new Error "Don't know what to do with #{obj}"
-    @_indent = @_indent[2..] if @options.format
-    @textnl "}" if open
-
+  # Set @unit to the default CSS unit
   context.unit = 'px'
+  # Takes multiple maps and arrays of maps
+  # First level array is flattened
+  # If map contains objects, is assumed to be selector: { prop: val } 
+  # If map contains strings, is assumed to be prop: val for use in attributes
   context.css = (args...) ->
     for arg in args
       if arg instanceof Array
@@ -441,6 +451,22 @@ HTMLPlugin = (context) ->
           parse_selector.call @, k, v
       else
         throw new Error "@css takes objects or arrays of objects"
+    null
+
+  context.css_attr = (args...) ->
+    prevBuffer = @_buffer
+    @_buffer = ''
+    for arg in args
+      if arg instanceof Array
+        for obj in arg
+          parse_css_obj.call @, "", obj
+      else if typeof arg is 'object'
+        parse_css_obj.call @, "", arg, yes
+      else
+        throw new Error "@css_attr takes objects or arrays of objects"
+    result = @_buffer
+    @_buffer = prevBuffer
+    result
 
   return context
 
