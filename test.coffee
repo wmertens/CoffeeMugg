@@ -68,11 +68,13 @@ tests =
     template: ->
       @h1 @h("<script>alert('\"pwned\" by c&a &copy;')</script>")
     expected: "<h1>&lt;script&gt;alert('&quot;pwned&quot; by c&amp;a &amp;copy;')&lt;/script&gt;</h1>"
+    alternate: '''<h1>&lt;script&gt;alert('"pwned" by c&amp;a &amp;copy;')&lt;/script&gt;</h1>'''
 
   'Autoescaping':
     template: ->
       @h1 "<script>alert('\"pwned\" by c&a &copy;')</script>"
     expected: "<h1>&lt;script&gt;alert('&quot;pwned&quot; by c&amp;a &amp;copy;')&lt;/script&gt;</h1>"
+    alternate: '''<h1>&lt;script&gt;alert('"pwned" by c&amp;a &amp;copy;')&lt;/script&gt;</h1>'''
     options: {autoescape: yes}
 
   'ID/class shortcut (combo)':
@@ -120,6 +122,14 @@ tests =
           <!--[if gte IE8]>
             <link href="ie.css" rel="stylesheet" />
           <![endif]-->
+        </head>
+      </html>
+    '''
+    alternate: '''
+      <html>
+        <head>
+          <title>test</title>
+          <!--CoffeeMugg: IE comments not supported, ignoring gte IE8-->
         </head>
       </html>
     '''
@@ -217,8 +227,8 @@ cm = require './src/coffeemugg'
       if test.run
         test.run()
       else
-        test.result = cm.render(test.template, test.options, (test.params || [])...)
-        test.success = test.result is test.expected
+        test.result = cm.render(test.template, test.options, (test.params || [])...).trim()
+        test.success = test.result is test.expected or ( test.alternate? and test.result is test.alternate )
         
       if test.success
         passed.push name

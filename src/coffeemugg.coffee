@@ -11,11 +11,14 @@ else
   coffeemugg = exports
   logger = require('nogg').logger('coffeemugg')
   coffee = require 'coffee-script'
+  jsdom = require('jsdom').jsdom
+  document = jsdom("")
 
 coffeemugg.version = '0.0.2'
 
 # Values available to the `doctype` function inside a template.
 # Ex.: `doctype 'strict'`
+# Amend this if you require a different type
 coffeemugg.doctypes =
   'default': '<!DOCTYPE html>'
   '5': '<!DOCTYPE html>'
@@ -100,6 +103,7 @@ coffeemugg.CMContext = CMContext = (options={}) ->
     _indent:   ''
 
     # Main entry function for a context object
+    # TODO provide API for inserting and updating part of a document
     render: (contents, args...) ->
       if typeof contents is 'string' and coffee?
         eval "contents = function () {#{coffee.compile contents, bare: yes}}"
@@ -108,10 +112,17 @@ coffeemugg.CMContext = CMContext = (options={}) ->
         contents.call(this, args...)
       this
 
+    # TODO allow this to update elements instead of just creating
+    # TODO create API for d3-like array joining
     render_tag: (name, args) ->
       attrs =
         class: {}
 
+      # Somebody wrote stuff, let's put it in a text node
+      # TODO this breaks writing raw HTML in a web page as a top level element
+      if @_buffer
+        @_parent.appendChild document.createTextNode @_buffer
+        @_buffer = ''
       # get idclass, attrs, contents
       # TODO move html specific stuff to html  plugin somehow
       for a in args
@@ -153,15 +164,12 @@ coffeemugg.CMContext = CMContext = (options={}) ->
                     attrs.class[i] = true
               else
                 contents = a
-      @textnl "<#{name}"
+      @_el = document.createElement(name)
       @render_attrs(attrs) if attrs
-      if coffeemugg.self_closing[name]
-        @text ' />'
-      else
-        @text '>'
+      if not coffeemugg.self_closing[name]
         @render_contents(contents)
-        @text "</#{name}>"
-      NEWLINE
+      @_parent.appendChild(@_el)
+      null
 
     render_attrs: (obj) ->
       for k, v of obj
@@ -183,18 +191,23 @@ coffeemugg.CMContext = CMContext = (options={}) ->
         if v
           # strings, numbers, objects and arrays are rendered "as is"
           # http://www.w3.org/TR/html4/appendix/notes.html#h-B.3.2.2
-          @text " #{k}=\"#{String(v).replace(/&/g,"&amp;").replace(/"/g,"&quot;")}\""
+          @_el.setAttribute k, v
+      null
 
     render_contents: (contents, args...) ->
       if typeof contents is 'function'
-        @_indent += '  ' if @options.format
+        origParent = @_parent
+        origEl = @_el
+        @_parent = @_el
         contents = contents.call(this, args...)
-        @_indent = @_indent[2..] if @options.format
-        if contents is NEWLINE
-          @textnl ""
+        @_parent = origParent
+        @_el = origEl
       switch typeof contents
         when 'string', 'number', 'boolean'
           @text @esc(contents)
+      if @_buffer
+        @_el.innerHTML += @_buffer
+      @_buffer = ''
       null
 
     esc: (txt) ->
@@ -207,7 +220,7 @@ coffeemugg.CMContext = CMContext = (options={}) ->
         .replace(/"/g, '&quot;')
 
     doctype: (type = 'default') ->
-      @textnl coffeemugg.doctypes[type]
+      @_doctype = coffeemugg.doctypes[type]
 
     textnl: (txt) ->
       @text "#{@_newline}#{@_indent}#{txt}"
@@ -222,16 +235,41 @@ coffeemugg.CMContext = CMContext = (options={}) ->
       @render_tag(name, args)
 
     comment: (cmt) ->
-      @textnl "<!--#{cmt}-->"
-      NEWLINE
+      @_parent.appendChild document.createComment cmt
 
     toString: ->
-      @_buffer
+      # You can't get the HTML of a documentFragment so we create it ourselves
+      t = ""
+      t += @_doctype if @_doctype
+      isDocType = document.DOCUMENT_TYPE_NODE
+      isComment = document.COMMENT_NODE
+      isText = document.TEXT_NODE
+      isElement = document.ELEMENT_NODE
+      n = @_parent.firstChild
+      while n
+        switch n.nodeType
+          when isDocType
+            t += "<!DOCTYPE #{n.name}>"
+          when isComment
+            t += "<!--#{n.textContent}-->"
+          when isText
+            t += n.textContent
+          when isElement
+            # TODO support innerHTML (Firefox <v11): write tag and correctly quoted attributes
+            #  - or simply don't care, this method shouldn't be used in a browser?
+            # BTW, jsdom formats outerHTML for the HTML element just like we want
+            t += n.outerHTML
+        n = n.nextSibling
+      t += @_buffer
+      t
 
     reset: ->
       @_buffer  = ''
       @_newline = ''
       @_indent  = ''
+      @_parent = document.createDocumentFragment()
+      @_el = undefined
+      @_doctype = undefined
       return @
 
   # Install plugins
@@ -255,10 +293,12 @@ HTMLPlugin = (context) ->
 
   # Special functions
   context.ie = (condition, contents) ->
-    @textnl "<!--[if #{condition}]>"
-    @render_contents(contents)
-    @text "<![endif]-->"
-    NEWLINE
+    @comment "CoffeeMugg: IE comments not supported, ignoring #{condition}"
+    # TODO To render this we'd need to @cede the contents and then put inside an @comment
+    #@textnl "<!--[if #{condition}]>"
+    #@render_contents(contents)
+    #@text "<![endif]-->"
+    #NEWLINE
 
   # CoffeeScript-generated JavaScript may contain anyone of these; but when we
   # take a function to string form to manipulate it, and then recreate it through
