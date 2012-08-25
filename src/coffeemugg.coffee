@@ -146,8 +146,7 @@ coffeemugg.CMContext = CMContext = (options={}) ->
                   else
                     throw new Error "Argument type for class not supported: #{k}:#{v}"
                 when 'style'
-                  # TODO move CSS property parsing to a string-returning function
-                  attrs[k] = v
+                  attrs[k] = @css_attr v
                 else
                   attrs[k] = v
           when 'number', 'boolean'

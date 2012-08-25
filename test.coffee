@@ -212,7 +212,7 @@ tests =
 
   'CSS style attribute':
     template: ->
-      @div style: @css_attr
+      @div style:
         animation: "foo"
         border_color: "foo"
     expected: '''<div style="animation: foo;ms-animation: foo;-moz-animation: foo;-webkit-animation: foo;border-color: foo;"></div>'''
