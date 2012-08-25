@@ -518,14 +518,17 @@ HTMLPlugin = (context) ->
   context.css_attr = (args...) ->
     prevBuffer = @_buffer
     @_buffer = ''
+    handleArg = (arg) ->
+      if typeof arg is 'string' or arg instanceof String
+        @textnl arg
+      else
+        parse_css_obj.call @, "", arg, yes
     for arg in args
       if arg instanceof Array
         for obj in arg
-          parse_css_obj.call @, "", obj
-      else if typeof arg is 'object'
-        parse_css_obj.call @, "", arg, yes
+          handleArg.call @, obj
       else
-        throw new Error "@css_attr takes objects or arrays of objects"
+        handleArg.call @, arg
     result = @_buffer
     @_buffer = prevBuffer
     result
